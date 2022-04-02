@@ -60,7 +60,6 @@ type SGOption struct {
 	Selector     selector.Selector
 	SelectOption selector.SelectOption
 	Wrappers     []Wrapper
-
 	Option
 	Auth                    string
 	CircuitBreakerThreshold uint64
@@ -79,8 +78,14 @@ var DefaultSGOption = SGOption{
 	FailMode: FailFast,
 	Retries:  0,
 	Selector: selector.NewRandomSelector(),
-
 	Option: DefaultOption,
 
 	Meta: make(map[string]string),
+}
+
+
+func (o *Option)AddTags(key ,value string){
+	if o.Tagged{
+		o.Tags[key]=value
+	}
 }

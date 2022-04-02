@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/lincx-911/lincxrpc/common/metadata"
 	"github.com/lincx-911/lincxrpc/protocol"
 	"github.com/lincx-911/lincxrpc/registry"
 )
@@ -44,7 +45,6 @@ func DegradeProviderFilter() Filter {
 // TaggedProviderFilter 基于tags进行过滤
 func TaggedProviderFilter(tags map[string]string) Filter {
 	return func(ctx context.Context, provider registry.Provider, ServiceMethod string, arg interface{}) bool {
-		
 		if tags == nil {
 			return true
 		}
@@ -120,4 +120,37 @@ func convertMapiface2Mapstring(data interface{})map[string]string{
 
 func NewRandomSelector() Selector {
 	return RandomSelectorInstance
+}
+
+// AppointedSelector 指定某个服务端
+type AppointedSelector struct {
+
+}
+
+var AppointedSelectorInstance = AppointedSelector{}
+
+func NewAppointedSelector()Selector{
+	return AppointedSelectorInstance
+}
+
+func(AppointedSelector)Next(ctx context.Context, providers []registry.Provider, ServiceMethod string, arg interface{}, opt SelectOption) (rp registry.Provider, err error) {
+	filters := combineFilter(opt.Filters)
+	meta:=metadata.FromContext(ctx)
+	if len(meta)==0{
+		err = fmt.Errorf("meta is nil")
+		return
+	}
+	server :=meta["server"].(string)
+	if len(server)==0{
+		err = fmt.Errorf("meta server is nil")
+		return
+	}
+	for _, p := range providers {
+		if p.Addr == server && filters(ctx, p, ServiceMethod, arg) {
+			rp = p
+			break
+		}
+	}
+	
+	return 
 }

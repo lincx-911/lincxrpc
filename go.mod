@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/consul/api v1.12.0 // indirect
 	github.com/samuel/go-zookeeper v0.0.0-20201211165307-7117e9ea2414 // indirect
+	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	google.golang.org/protobuf v1.27.1
 )

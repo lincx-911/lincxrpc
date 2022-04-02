@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/lincx-911/lincxrpc/common"
 	"github.com/lincx-911/lincxrpc/common/metadata"
 	"github.com/lincx-911/lincxrpc/protocol"
 	"github.com/lincx-911/lincxrpc/registry"
@@ -42,6 +43,12 @@ func (w *DefaultServerWrapper) WrapServe(s *SGServer, serveFunc ServeFunc) Serve
 		}
 		meta["services"] = s.Services()
 		// TODO registry
+		if addr[0]==':'{
+			addr = common.LocalIPV4()+addr
+			s.addr = addr
+		}
+		
+		
 		provider := registry.Provider{
 			ProviderKey: network + "@" + addr,
 			Network:     network,
@@ -50,11 +57,10 @@ func (w *DefaultServerWrapper) WrapServe(s *SGServer, serveFunc ServeFunc) Serve
 		}
 		r := s.Option.Registry
 		rOpt := s.Option.RegisterOption
-
 		r.Register(rOpt, provider)
 		log.Printf("registered provider %v for app %s", provider, rOpt)
 		//启动http serve
-		s.startGateway()
+		s.StartGateway()
 		return serveFunc(network, addr, meta)
 	}
 }
@@ -71,6 +77,7 @@ func (w *DefaultServerWrapper) WrapHandleRequest(s *SGServer, requestFunc Handle
 
 func (w *DefaultServerWrapper) WrapClose(s *SGServer, closeFunc CloseFunc) CloseFunc {
 	return func() error {
+		
 		provider := registry.Provider{
 			ProviderKey: s.network + "@" + s.addr,
 			Network:     s.network,

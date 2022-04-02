@@ -29,6 +29,7 @@ func (w *MetaDataWrapper) WrapGo(option *SGOption, goFunc GoFunc) GoFunc {
 }
 // wrapContext 设置上下文ctx参数
 func wrapContext(ctx context.Context, option *SGOption) context.Context {
+
 	timeout := time.Duration(0)
 	deadline, ok := ctx.Deadline()
 	if ok {
@@ -43,6 +44,13 @@ func wrapContext(ctx context.Context, option *SGOption) context.Context {
 
 	metaData := metadata.FromContext(ctx)
 	metaData[protocol.RequestTimeoutKey] = uint64(timeout)
+	
+	if len(option.Meta)!=0{
+		
+		for k,v:=range option.Meta{
+			metaData[k]=v
+		}
+	}
 
 	if option.Auth != "" {
 		metaData[protocol.AuthKey] = option.Auth

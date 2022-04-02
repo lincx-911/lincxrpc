@@ -15,6 +15,7 @@ import (
 	//"github.com/docker/libkv/store"
 	"github.com/lincx-911/lincxrpc/client"
 	"github.com/lincx-911/lincxrpc/codec"
+	"github.com/lincx-911/lincxrpc/common"
 	"github.com/lincx-911/lincxrpc/protocol"
 	"github.com/lincx-911/lincxrpc/registry"
 
@@ -65,7 +66,7 @@ func MakeHttpCall() {
 	arg := service.Args{A: rand.Intn(200), B: rand.Intn(100)}
 	data, _ := msgpack.Marshal(arg)
 	body := bytes.NewBuffer(data)
-	req, err := http.NewRequest("POST", "http://localhost:5080/invoke", body)
+	req, err := http.NewRequest("POST", "http://localhost:5080/lincxrpc/invoke", body)
 	if err != nil {
 		log.Println(err)
 		return
@@ -107,8 +108,9 @@ func StopServer() {
 //var Registry = zookeeper.NewZookeeperRegistry("my-app", "/mns/sankuai/service",
 //	[]string{"127.0.0.1:2181"}, 1e10, nil)
 var Registry = memory.NewInMemoryRegistry()
+var IPv4 = common.LocalIPV4()
 
-//var Registry = libkv.NewKVRegistry(store.ZK,[]string{"172.31.39.124:2181"},"my-app",nil, "/mns/lincxlock/service",time.Second*3)
+//var Registry = libkv.NewKVRegistry(libkv.ZK,[]string{"172.31.39.124:2181"},"my-app",nil, "/mns/lincxlock/service",time.Second*3)
 func StartServer() {
 	go func() {
 		serverOpt := server.DefaultOption
@@ -128,8 +130,8 @@ func StartServer() {
 		serverOpt := server.DefaultOption
 		serverOpt.RegisterOption.AppKey = "my-app"
 		serverOpt.Registry = Registry
-		serverOpt.Tags = map[string]string{"status": "starting"}
-
+		serverOpt.Tags = map[string]string{"status": "alive"}
+		
 		s2 = server.NewRPCServer(serverOpt)
 		err := s2.Register(service.Arith{})
 		if err != nil {
@@ -137,19 +139,22 @@ func StartServer() {
 		}
 		port := 8881
 		s2.Serve("tcp", ":"+strconv.Itoa(port), nil)
+		
 	}()
 	go func() {
+		port := 8882
+		ser := IPv4 + ":" + strconv.Itoa(port)
 		serverOpt := server.DefaultOption
 		serverOpt.RegisterOption.AppKey = "my-app"
 		serverOpt.Registry = Registry
-		serverOpt.Tags = map[string]string{"status": "alive"}
+		serverOpt.Tags = map[string]string{"status": "alive", "server": ser}
 
 		s3 = server.NewRPCServer(serverOpt)
 		err := s3.Register(service.Arith{})
 		if err != nil {
 			log.Println("err!!!" + err.Error())
 		}
-		port := 8882
+
 		s3.Serve("tcp", ":"+strconv.Itoa(port), nil)
 	}()
 }
@@ -162,12 +167,13 @@ func MakeCall(t codec.SerializeType, re registry.Registry) {
 	op.DialTimeout = time.Millisecond * 100
 	op.FailMode = client.FailRetry
 	op.Retries = 3
-
+	// op.Selector = selector.NewAppointedSelector()
 	op.Heartbeat = true
 	op.HeartbeatInterval = time.Second * 10
 	op.HeartbeatDegradeThreshold = 10
 	op.Tagged = true
-	op.Tags = map[string]string{"status": "alive"}
+	op.Tags = map[string]string{"status": "alive","server": "192.168.56.1:8882"}
+	op.Meta = map[string]string{"server": "192.168.56.1:8882"}
 	//op.Wrappers = append(op.Wrappers, &client.RateLimitInterceptor{Limit: &ratelimit.DefaultRateLimiter{Num: 1}})
 
 	//r := registry.NewPeer2PeerRegistry()

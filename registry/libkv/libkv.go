@@ -20,6 +20,15 @@ import (
 
 	"github.com/docker/libkv/store/zookeeper"
 )
+type Backend string
+const(
+	// CONSUL backend
+	CONSUL Backend = "consul"
+	// ZK backend
+	ZK Backend = "zk"
+	// BOLTDB backend
+	BOLTDB Backend = "boltdb"
+)
 
 type KVRegistry struct {
 	AppKey         string        //KVRegistry
@@ -59,20 +68,24 @@ func (w *Watcher) Close() {
 	}
 }
 
-func NewKVRegistry(backend store.Backend, addrs []string, AppKey string,
+func NewKVRegistry(backend Backend, addrs []string, AppKey string,
 	cfg *store.Config, servicePath string, updateInterval time.Duration) registry.Registry {
+	var be store.Backend
 	switch backend {
-	case store.ZK:
+	case ZK:
+		be = store.ZK
 		zookeeper.Register()
-	case store.CONSUL:
+	case CONSUL:
+		be = store.CONSUL
 		consul.Register()
-	case store.BOLTDB:
+	case BOLTDB:
+		be = store.BOLTDB
 		boltdb.Register()
 	}
 	r := new(KVRegistry)
 	r.AppKey = AppKey
 	r.UpdateInterval = updateInterval
-	kv, err := libkv.NewStore(backend, addrs, cfg)
+	kv, err := libkv.NewStore(be, addrs, cfg)
 	if err != nil {
 		log.Fatalf("cannot create kv registry: %v", err)
 	}
@@ -217,6 +230,7 @@ func (r *KVRegistry) Register(option registry.RegisterOption, provider ...regist
 			p.Addr = ipv4 + p.Addr
 		}
 		key := serviceBasePath + p.Network + "@" + p.Addr
+		log.Println("key :"+key)
 		data, _ := json.Marshal(p.Meta)
 		err := r.kv.Put(key, data, nil)
 		if err != nil {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/lincx-911/lincxrpc/codec"
 )
-
+//消息协议定义
 //-------------------------------------------------------------------------------------------------
 //|2byte|1byte  |4byte       |4byte        | header length |(total length - header length - 4byte)|
 //-------------------------------------------------------------------------------------------------
@@ -19,16 +19,17 @@ var MAGIC = []byte{0xab, 0xba}
 const (
 	version = 0x00
 )
-
+// MessageType 消息类型
 type MessageType byte
 
-// 请求类型
+// 消息类型
 const (
-	MessageTypeRequest MessageType = iota
-	MessageTypeResponse
-	MessageTypeHeartbeat
+	MessageTypeRequest MessageType = iota //请求
+	MessageTypeResponse // 响应
+	MessageTypeHeartbeat //心跳
 )
 
+// ParseMessageType string转type
 func ParseMessageType(name string) (MessageType, error) {
 	switch name {
 	case "request":
@@ -42,6 +43,7 @@ func ParseMessageType(name string) (MessageType, error) {
 	}
 }
 
+// String 转字符串
 func (messageType MessageType) String() string {
 	switch messageType {
 	case MessageTypeRequest:
@@ -54,11 +56,11 @@ func (messageType MessageType) String() string {
 		return "unknown"
 	}
 }
-
+// CompressType 压缩类型
 type CompressType byte
 
 const (
-	CompressTypeNone CompressType = iota
+	CompressTypeNone CompressType = iota //不压缩
 )
 
 func ParseCompressType(name string) (CompressType, error) {
@@ -79,8 +81,8 @@ func (compressType CompressType) String() string {
 	}
 }
 
+// StatusCode 状态
 type StatusCode byte
-
 const (
 	StatusOK StatusCode = iota
 	StatusError
@@ -109,7 +111,6 @@ func ParseStatusCode(name string) (StatusCode, error) {
 }
 
 type ProtocolType byte
-
 const (
 	Default ProtocolType = iota
 )
@@ -125,6 +126,7 @@ var protocols = map[ProtocolType]Protocol{
 	Default: &RPCProtocol{},
 }
 
+// 键
 const (
 	RequestSeqKey      string = "rpc_request_seq"
 	RequestTimeoutKey  string = "rpc_request_timeout"
@@ -153,6 +155,7 @@ type Message struct {
 	Data []byte
 }
 
+// Clone 克隆消息内容与头部
 func (m *Message) Clone() *Message {
 	header := m.Header
 	res := new(Message)
@@ -160,6 +163,8 @@ func (m *Message) Clone() *Message {
 	res.Data = m.Data
 	return res
 }
+
+// Deadline 过期时间
 func (m *Message) Deadline() (time.Time, bool) {
 	if m.MetaData == nil {
 		return time.Now(), false
@@ -180,26 +185,32 @@ func (m *Message) Deadline() (time.Time, bool) {
 	}
 }
 
+// NewMessage 创建消息
 func NewMessage(t ProtocolType) *Message {
 	return protocols[t].NewMessage()
 }
 
+// DecodeMessage 反序列化消息
 func DecodeMessage(t ProtocolType, r io.Reader) (*Message, error) {
 	return protocols[t].DecodeMessage(r)
 }
 
+// EncodeMessage 序列化消息
 func EncodeMessage(t ProtocolType, m *Message) []byte {
 	return protocols[t].EncodeMessage(m)
 }
 
+// RPCProtocol rpc协议
 type RPCProtocol struct {
 }
 
+// NewMessage 创建消息
 func (rp *RPCProtocol) NewMessage() *Message {
 	return &Message{Header: &Header{}}
 }
-
+// DecodeMessage 反序列化消息
 func (rp *RPCProtocol) DecodeMessage(r io.Reader) (msg *Message, err error) {
+	// 前三位
 	first3bytes := make([]byte, 3)
 	_, err = io.ReadFull(r, first3bytes)
 	if err != nil {
@@ -237,7 +248,7 @@ func (rp *RPCProtocol) DecodeMessage(r io.Reader) (msg *Message, err error) {
 	msg.Data = data[headerLen+4:]
 	return
 }
-
+// EncodeMessage 序列化消息
 func (rp *RPCProtocol) EncodeMessage(message *Message) []byte {
 	first3bytes := []byte{MAGIC[0], MAGIC[1], version}
 	cc := codec.GetCodec(codec.MessagePackType)

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lincx-911/lincxrpc/registry"
 	"github.com/google/uuid"
+	"github.com/lincx-911/lincxrpc/registry"
 )
 
 var (
@@ -32,8 +32,10 @@ func (r *Registry) Register(option registry.RegisterOption, providers ...registr
 	defer r.mu.Unlock()
 	go r.sendWatcherEvent(option.AppKey, providers...)
 	var providers2Register []registry.Provider
+
 	for _, p := range providers {
 		exist := false
+		
 		for _, cp := range r.providers {
 			if cp.ProviderKey == p.ProviderKey {
 				exist = true
@@ -155,7 +157,6 @@ func (m *Watcher) Close() {
 		close(m.exit)
 	}
 }
-
 
 func NewInMemoryRegistry() registry.Registry {
 	r := &Registry{}

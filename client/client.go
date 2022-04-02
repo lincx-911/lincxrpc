@@ -65,7 +65,7 @@ func NewRPCClient(network, addr string, option Option) (RPCClient, error) {
 	tr := transport.NewTransport(option.TransportType)
 	err := tr.Dial(network, addr, transport.DialOption{Timeout: option.DialTimeout})
 	if err != nil {
-		
+
 		return nil, err
 	}
 	client.rwc = tr
@@ -82,14 +82,13 @@ func NewSGClient(option SGOption) SGClient {
 	s.option = option
 	AddWrapper(&s.option, &MetaDataWrapper{})
 	providers := s.option.Registry.GetServiceList()
-	
 
 	s.watcher = s.option.Registry.Watch()
 	go s.watchService(s.watcher)
 	s.serversMu.Lock()
 	defer s.serversMu.Unlock()
 	s.servers = append(s.servers, providers...)
-	
+
 	if s.option.Heartbeat {
 		go s.heartbeat()
 		s.option.SelectOption.Filters = append(s.option.SelectOption.Filters,
@@ -123,12 +122,9 @@ func (c *sgClient) wrapGo(goFunc GoFunc) GoFunc {
 func (c *sgClient) Call(ctx context.Context, serviceMethod string, arg interface{}, reply interface{}) error {
 	provider, rpcClient, err := c.selectClient(ctx, serviceMethod, arg)
 	if err != nil && c.option.FailMode == FailFast {
-		
+
 		return err
 	}
-
-	
-	
 	var connectErr error
 
 	switch c.option.FailMode {
@@ -138,7 +134,7 @@ func (c *sgClient) Call(ctx context.Context, serviceMethod string, arg interface
 			retries--
 
 			if rpcClient != nil {
-				
+
 				err = c.wrapCall(rpcClient.Call)(ctx, serviceMethod, arg, reply)
 				if err == nil {
 					// TODO circuit
@@ -157,7 +153,7 @@ func (c *sgClient) Call(ctx context.Context, serviceMethod string, arg interface
 			}
 			c.removeClient(provider.ProviderKey, rpcClient)
 			rpcClient, connectErr = c.getclient(provider)
-			
+
 		}
 		if err == nil {
 			err = connectErr
@@ -215,7 +211,7 @@ func (c *sgClient) Call(ctx context.Context, serviceMethod string, arg interface
 		}
 		return err
 	default:
-		
+
 		err = c.wrapCall(rpcClient.Call)(ctx, serviceMethod, arg, reply)
 		if err != nil {
 			if _, ok := err.(ServiceError); !ok {
@@ -294,13 +290,12 @@ func (c *sgClient) watchService(watcher registry.Watcher) {
 }
 
 func (c *sgClient) selectClient(ctx context.Context, serviceMethod string, arg interface{}) (provider registry.Provider, client RPCClient, err error) {
-	
-	provider, err = c.option.Selector.Next(ctx, c.providers(), serviceMethod, arg, c.option.SelectOption)
 
+	provider, err = c.option.Selector.Next(ctx, c.providers(), serviceMethod, arg, c.option.SelectOption)
 	if err != nil {
 		return
 	}
-	
+
 	client, err = c.getclient(provider)
 	return
 }
@@ -327,7 +322,7 @@ func (c *sgClient) getclient(provider registry.Provider) (client RPCClient, err 
 	if ok {
 		client = rc.(RPCClient)
 	} else {
-		
+
 		client, err = NewRPCClient(provider.Network, provider.Addr, c.option.Option)
 		if err != nil {
 			return

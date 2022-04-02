@@ -19,6 +19,7 @@ import (
 	"github.com/lincx-911/lincxrpc/transport"
 )
 
+// RPCServer rpc接口
 type RPCServer interface {
 	Register(rcvr interface{}) error
 	Serve(network string, addr string, metaData map[string]interface{}) error
@@ -31,26 +32,29 @@ type ServiceInfo struct {
 	Methods []string `json:"methods"`
 }
 
+// Server 服务端
 type SGServer struct {
-	codec      codec.Codec
-	serviceMap sync.Map
-	tr         transport.ServerTransport
+	codec      codec.Codec               //序列化类型
+	serviceMap sync.Map                  // 保存服务
+	tr         transport.ServerTransport //传输层
 	mutex      sync.Mutex
 	shutdown   bool
 
-	requestInProcess int64 //当前正在处理中的请求数
-	network          string
-	addr             string
+	requestInProcess int64  //当前正在处理中的请求数
+	network          string //网络类型 tcp.....
+	addr             string // 端口地址
 
-	Option Option
+	Option Option // 配置选项
 }
 
+// methodType 方法类型
 type methodType struct {
 	method    reflect.Method
 	ArgType   reflect.Type
 	ReplyType reflect.Type
 }
 
+// service 服务
 type service struct {
 	name    string
 	typ     reflect.Type
@@ -58,6 +62,7 @@ type service struct {
 	methods sync.Map
 }
 
+// NewRPCServer RPC创建服务端
 func NewRPCServer(option Option) RPCServer {
 	s := new(SGServer)
 	s.Option = option
@@ -77,6 +82,8 @@ func NewRPCServer(option Option) RPCServer {
 	return s
 }
 
+// Register 注册服务
+// rvcr
 func (s *SGServer) Register(rcvr interface{}) error {
 	typ := reflect.TypeOf(rcvr)
 	name := typ.Name()
@@ -200,6 +207,7 @@ func isExported(name string) bool {
 	return unicode.IsUpper(rune)
 }
 
+// Serve 注册新的服务端
 func (s *SGServer) Serve(network string, addr string, metaData map[string]interface{}) error {
 	s.addr = addr
 	s.network = network
@@ -214,6 +222,7 @@ func (s *SGServer) wrapServe(serveFunc ServeFunc) ServeFunc {
 	return serveFunc
 }
 
+// serve 注册新的服务端主要逻辑
 func (s *SGServer) serve(network string, addr string, metaData map[string]interface{}) error {
 	if s.shutdown {
 		return nil
@@ -240,6 +249,7 @@ func (s *SGServer) serve(network string, addr string, metaData map[string]interf
 	}
 }
 
+// Services 获取服务列表
 func (s *SGServer) Services() []ServiceInfo {
 	var srvs []ServiceInfo
 	s.serviceMap.Range(func(key, value interface{}) bool {
@@ -296,6 +306,7 @@ func (s *SGServer) close() error {
 	return nil
 }
 
+// Request 请求
 type Request struct {
 	Seq   uint32
 	Reply interface{}
@@ -341,19 +352,22 @@ func (s *SGServer) wrapHandleRequest(handleFunc HandleRequestFunc) HandleRequest
 	return handleFunc
 }
 
+// 处理请求
 func (s *SGServer) doHandleRequest(ctx context.Context, request *protocol.Message, response *protocol.Message, tr transport.Transport) {
 	response = s.process(ctx, request, response)
 	s.writeResponse(ctx, tr, response)
 }
 
+//处理请求的主要逻辑
 func (s *SGServer) process(ctx context.Context, request *protocol.Message, response *protocol.Message) *protocol.Message {
+	// 心跳信息直接返回响应
 	if request.MessageType == protocol.MessageTypeHeartbeat {
 		response.MessageType = protocol.MessageTypeResponse
 		return response
 	}
 	sname := request.ServiceName
 	mname := request.MethodName
-	srvInterface, ok := s.serviceMap.Load(sname)
+	srvInterface, ok := s.serviceMap.Load(sname) //获取服务
 	if !ok {
 		return errorResponse(response, "can not find service")
 	}
@@ -408,6 +422,7 @@ func (s *SGServer) process(ctx context.Context, request *protocol.Message, respo
 
 }
 
+// errorResponse 出错的响应
 func errorResponse(message *protocol.Message, err string) *protocol.Message {
 	message.Error = err
 	message.StatusCode = protocol.StatusError
@@ -431,6 +446,7 @@ func (s *SGServer) writeErrorResponse(response *protocol.Message, w io.Writer, e
 	_, _ = w.Write(protocol.EncodeMessage(s.Option.ProtocolType, response))
 }
 
+// writeResponse 写入响应
 func (s *SGServer) writeResponse(ctx context.Context, tr transport.Transport, response *protocol.Message) {
 	deadline, ok := ctx.Deadline()
 	if ok && time.Now().After(deadline) {
@@ -443,6 +459,7 @@ func (s *SGServer) writeResponse(ctx context.Context, tr transport.Transport, re
 	}
 }
 
+// AddShutdownHook
 func (s *SGServer) AddShutdownHook(hook ShutDownHook) {
 	s.mutex.Lock()
 	s.Option.ShutDownHooks = append(s.Option.ShutDownHooks, hook)

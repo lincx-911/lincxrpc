@@ -14,7 +14,6 @@ import (
 
 // 序列化类型
 type SerializeType byte
-
 func (serializeType SerializeType) String() string {
 	switch serializeType {
 	case MessagePackType:
@@ -25,7 +24,6 @@ func (serializeType SerializeType) String() string {
 		return "json"
 	case ProtoBufType:
 		return "protobuf"
-
 	default:
 		return "unknown"
 	}
@@ -38,6 +36,7 @@ const (
 	MessagePackType
 )
 
+// ParseSerializeType 
 func ParseSerializeType(name string) (SerializeType, error) {
 	switch name {
 	case "messagepack":
@@ -66,6 +65,7 @@ type Codec interface {
 	Decode(data []byte, i interface{}) error
 }
 
+// GetCodec 获取对应序列化类型的codec
 func GetCodec(st SerializeType) Codec {
 	return codecs[st]
 }

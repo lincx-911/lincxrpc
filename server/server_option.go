@@ -24,6 +24,15 @@ type Option struct {
 	SerializeType  codec.SerializeType
 	CompressType   protocol.CompressType
 	TransportType  transport.TransportType
+	HttpsConf HttpsOption
+}
+
+// HttpsOption 配置https
+type HttpsOption struct{
+	On bool // 是否使用https,默认 false
+	ServerCrtPath string // 服务器证书路径
+	ServerKeyPath string // 服务器证书秘钥路径
+	CaCerPath string // CA根证书路径
 }
 
 // DefaultOption 默认
@@ -33,4 +42,5 @@ var DefaultOption = Option{
 	SerializeType: codec.MessagePackType,
 	CompressType:  protocol.CompressTypeNone,
 	TransportType: transport.TCPTransport,
+	HttpsConf: HttpsOption{On: false,},
 }

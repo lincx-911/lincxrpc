@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -28,8 +30,13 @@ const (
 
 )
 
-func (s *SGServer) startGateway() {
-	port := 5080
+var(
+	HttpSeverUrl string = "/lincxrpc/invoke" // http服务的路由,
+	HttpPort int = 5080 // http服务监听的端口号
+)
+
+func (s *SGServer) StartGateway() {
+	port := HttpPort
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	for err != nil && strings.Contains(err.Error(), "Only one usage of each socket address") {
 		port++
@@ -47,13 +54,37 @@ func (s *SGServer) startGateway() {
 		}
 	}()
 }
+// StartHttps 启动https
+func (s *SGServer)StartHttps(port int,svrcrtPath,svrkeyPath,caCerPath string)error{
+	pool := x509.NewCertPool()
+	caCrt,err:=ioutil.ReadFile(caCerPath)
+	if err!=nil{
+		log.Printf("error serving https %s",err.Error())
+		return err
+	}
+	pool.AppendCertsFromPEM(caCrt)
+	server := &http.Server{
+		Addr: ":"+strconv.Itoa(port),
+		Handler: s,
+		TLSConfig: &tls.Config{
+			ClientCAs: pool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		},
+	}
+	if err = server.ListenAndServeTLS(svrcrtPath,svrkeyPath);err!=nil{
+		log.Printf("error serving https ListenAndServeTLS %v",err)
+		return err
+	}
+	return nil
+}
 
+// ServeHTTP 处理请求
 func (s *SGServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/invoke" {
+	if r.URL.Path != HttpSeverUrl {
 		w.WriteHeader(404)
 		return
 	}
-
+	
 	if r.Method != "POST" {
 		w.WriteHeader(405)
 		return
@@ -131,6 +162,8 @@ func parseHeader(message *protocol.Message, request *http.Request) (*protocol.Me
 
 	return message, nil
 }
+
+
 
 func parseBody(message *protocol.Message, request *http.Request) (*protocol.Message, error) {
 	data, err := ioutil.ReadAll(request.Body)
