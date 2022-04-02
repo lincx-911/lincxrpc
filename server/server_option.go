@@ -30,6 +30,7 @@ type Option struct {
 // HttpsOption 配置https
 type HttpsOption struct{
 	On bool // 是否使用https,默认 false
+	Port int
 	ServerCrtPath string // 服务器证书路径
 	ServerKeyPath string // 服务器证书秘钥路径
 	CaCerPath string // CA根证书路径

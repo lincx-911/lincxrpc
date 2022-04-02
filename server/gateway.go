@@ -46,23 +46,29 @@ func (s *SGServer) StartGateway() {
 		log.Printf("error listening gateway: %s", err.Error())
 		return
 	}
-	log.Printf("gateway listenning on " + strconv.Itoa(port))
+	log.Printf("gateway http listenning on " + strconv.Itoa(port))
 	go func() {
 		err := http.Serve(ln, s)
 		if err != nil {
 			log.Printf("error serving http %s", err.Error())
 		}
 	}()
+	go s.StartHttps()
 }
 // StartHttps 启动https
-func (s *SGServer)StartHttps(port int,svrcrtPath,svrkeyPath,caCerPath string)error{
+func (s *SGServer)StartHttps(){
+	if !s.Option.HttpsConf.On{
+		return 
+	}
+	caCerPath := s.Option.HttpsConf.CaCerPath
 	pool := x509.NewCertPool()
 	caCrt,err:=ioutil.ReadFile(caCerPath)
 	if err!=nil{
 		log.Printf("error serving https %s",err.Error())
-		return err
+		return
 	}
 	pool.AppendCertsFromPEM(caCrt)
+	port := s.Option.HttpsConf.Port
 	server := &http.Server{
 		Addr: ":"+strconv.Itoa(port),
 		Handler: s,
@@ -71,11 +77,13 @@ func (s *SGServer)StartHttps(port int,svrcrtPath,svrkeyPath,caCerPath string)err
 			ClientAuth: tls.RequireAndVerifyClientCert,
 		},
 	}
+	svrcrtPath := s.Option.HttpsConf.ServerCrtPath
+	svrkeyPath := s.Option.HttpsConf.ServerKeyPath
 	if err = server.ListenAndServeTLS(svrcrtPath,svrkeyPath);err!=nil{
 		log.Printf("error serving https ListenAndServeTLS %v",err)
-		return err
+		return
 	}
-	return nil
+	log.Printf("https server listening on %d",port)
 }
 
 // ServeHTTP 处理请求
