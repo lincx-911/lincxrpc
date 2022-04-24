@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	//"github.com/docker/libkv/store"
@@ -17,11 +20,8 @@ import (
 	"github.com/lincx-911/lincxrpc/codec"
 	"github.com/lincx-911/lincxrpc/common"
 	"github.com/lincx-911/lincxrpc/protocol"
-	"github.com/lincx-911/lincxrpc/registry"
 
-	//"github.com/lincx-911/lincxrpc/registry/libkv"
-
-	"github.com/lincx-911/lincxrpc/registry/memory"
+	"github.com/lincx-911/lincxrpc/registry/kvregistry"
 
 	"github.com/lincx-911/lincxrpc/server"
 	"github.com/lincx-911/lincxrpc/service"
@@ -31,34 +31,38 @@ import (
 const callTimes = 11
 
 var s1, s2, s3 server.RPCServer
-
+var zkserver = "172.27.78.70:2181"
 func main() {
 
-	StartServer()
-	time.Sleep(time.Second * 3)
-	start := time.Now()
-	//regitry1 := libkv.NewKVRegistry(store.ZK,[]string{"172.31.39.124:2181"},"my-app",nil, "/mns/lincxlock/service",time.Second)
-	// list := Registry.GetServiceList()
-	// for i:=0;i<len(list);i++{
-	// 	log.Printf("provider %d is %v",i,list[i])
-	// }
-	for i := 0; i < callTimes; i++ {
-		MakeCall(codec.MessagePackType, Registry)
-	}
-	cost := time.Now().Sub(start)
-	log.Printf("cost:%s", cost)
-
-	// start = time.Now()
+	go StartServer()
+	// time.Sleep(time.Second * 3)
+	// MakeCall(codec.MessagePackType)
+	// 
+	// start := time.Now()
+	// //regitry1 := libkv.NewKVRegistry(store.ZK,[]string{"172.31.39.124:2181"},"my-app",nil, "/mns/lincxlock/service",time.Second)
+	// // list := Registry.GetServiceList()
+	// // for i:=0;i<len(list);i++{
+	// // 	log.Printf("provider %d is %v",i,list[i])
+	// // }
 	// for i := 0; i < callTimes; i++ {
-	// 	MakeCall(codec.GobType)
+	// 	MakeCall(codec.MessagePackType)
 	// }
-	// cost = time.Now().Sub(start)
+	// cost := time.Now().Sub(start)
 	// log.Printf("cost:%s", cost)
 
-	for i := 0; i < callTimes; i++ {
-		MakeHttpCall()
-	}
+	// // start = time.Now()
+	// // for i := 0; i < callTimes; i++ {
+	// // 	MakeCall(codec.GobType)
+	// // }
+	// // cost = time.Now().Sub(start)
+	// // log.Printf("cost:%s", cost)
 
+	// for i := 0; i < callTimes; i++ {
+	// 	MakeHttpCall()
+	// }
+	quit := make(chan os.Signal)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
 	StopServer()
 }
 
@@ -95,7 +99,6 @@ func MakeHttpCall() {
 		data, err = ioutil.ReadAll(response.Body)
 		result := service.Reply{}
 		msgpack.Unmarshal(data, &result)
-		fmt.Println(result.C)
 	}
 }
 
@@ -107,10 +110,9 @@ func StopServer() {
 
 //var Registry = zookeeper.NewZookeeperRegistry("my-app", "/mns/sankuai/service",
 //	[]string{"127.0.0.1:2181"}, 1e10, nil)
-var Registry = memory.NewInMemoryRegistry()
+//var Registry = memory.NewInMemoryRegistry()
 var IPv4 = common.LocalIPV4()
-
-//var Registry = libkv.NewKVRegistry(libkv.ZK,[]string{"172.31.39.124:2181"},"my-app",nil, "/mns/lincxlock/service",time.Second*3)
+var Registry = kvregistry.NewKVRegistry(kvregistry.ZK,[]string{zkserver},"my-app",nil, "/mns/lincxlock/service",time.Second*3)
 func StartServer() {
 	go func() {
 		serverOpt := server.DefaultOption
@@ -143,11 +145,11 @@ func StartServer() {
 	}()
 	go func() {
 		port := 8882
-		ser := IPv4 + ":" + strconv.Itoa(port)
+		
 		serverOpt := server.DefaultOption
 		serverOpt.RegisterOption.AppKey = "my-app"
 		serverOpt.Registry = Registry
-		serverOpt.Tags = map[string]string{"status": "alive", "server": ser}
+		serverOpt.Tags = map[string]string{"status": "alive"}
 
 		s3 = server.NewRPCServer(serverOpt)
 		err := s3.Register(service.Arith{})
@@ -159,7 +161,7 @@ func StartServer() {
 	}()
 }
 
-func MakeCall(t codec.SerializeType, re registry.Registry) {
+func MakeCall(t codec.SerializeType) {
 	op := &client.DefaultSGOption
 	op.AppKey = "my-app"
 	op.SerializeType = t
@@ -172,8 +174,8 @@ func MakeCall(t codec.SerializeType, re registry.Registry) {
 	op.HeartbeatInterval = time.Second * 10
 	op.HeartbeatDegradeThreshold = 10
 	op.Tagged = true
-	op.Tags = map[string]string{"status": "alive","server": "192.168.56.1:8882"}
-	op.Meta = map[string]string{"server": "192.168.56.1:8882"}
+	op.Tags = map[string]string{"status": "alive"}
+	op.Meta = map[string]string{}
 	//op.Wrappers = append(op.Wrappers, &client.RateLimitInterceptor{Limit: &ratelimit.DefaultRateLimiter{Num: 1}})
 
 	//r := registry.NewPeer2PeerRegistry()
@@ -224,4 +226,5 @@ func MakeCall(t codec.SerializeType, re registry.Registry) {
 	// } else if reply.C != args.A/args.B {
 	// 	log.Printf("%d / %d != %d", args.A, args.B, reply.C)
 	// }
+
 }

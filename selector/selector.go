@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"math/rand"
+	"sort"
+	"strconv"
+	"sync"
 	"time"
 
-	"github.com/lincx-911/lincxrpc/common/metadata"
 	"github.com/lincx-911/lincxrpc/protocol"
 	"github.com/lincx-911/lincxrpc/registry"
 )
@@ -122,35 +125,99 @@ func NewRandomSelector() Selector {
 	return RandomSelectorInstance
 }
 
-// AppointedSelector 指定某个服务端
-type AppointedSelector struct {
-
+// HashSelector 一致哈希
+type HashSelector struct {
+	//排序的hash虚拟结点
+	hashSortedNodes []uint32
+	//虚拟结点对应的结点信息
+	circle map[uint32]*registry.Provider
+	//已绑定的结点
+	nodes map[string]bool
+	//map读写锁
+	sync.RWMutex
+	//虚拟结点数
+	virtualNodeCount int
 }
 
-var AppointedSelectorInstance = AppointedSelector{}
+var HashSelectorInstance = HashSelector{}
 
-func NewAppointedSelector()Selector{
-	return AppointedSelectorInstance
+func NewHashSelector()Selector{
+	return &HashSelectorInstance
 }
 
-func(AppointedSelector)Next(ctx context.Context, providers []registry.Provider, ServiceMethod string, arg interface{}, opt SelectOption) (rp registry.Provider, err error) {
+func(hs *HashSelector)Next(ctx context.Context, providers []registry.Provider, ServiceMethod string, arg interface{}, opt SelectOption) (rp registry.Provider, err error) {
 	filters := combineFilter(opt.Filters)
-	meta:=metadata.FromContext(ctx)
-	if len(meta)==0{
-		err = fmt.Errorf("meta is nil")
-		return
-	}
-	server :=meta["server"].(string)
-	if len(server)==0{
-		err = fmt.Errorf("meta server is nil")
-		return
-	}
+	list := make([]registry.Provider, 0)
 	for _, p := range providers {
-		if p.Addr == server && filters(ctx, p, ServiceMethod, arg) {
-			rp = p
-			break
+
+		if filters(ctx, p, ServiceMethod, arg) {
+			list = append(list, p)
 		}
+	}
+	if len(list) == 0 {
+		err = ErrEmptyProviderList
+		return
 	}
 	
 	return 
 }
+func (c *HashSelector) hashKey(key string) uint32 {
+	return crc32.ChecksumIEEE([]byte(key))
+}
+
+func (c *HashSelector) Add(node *registry.Provider, virtualNodeCount int) error {
+	if node.ProviderKey == "" {
+		return nil
+	}
+	c.Lock()
+	defer c.Unlock()
+
+	if c.circle == nil {
+		c.circle = map[uint32]*registry.Provider{}
+	}
+	if c.nodes == nil {
+		c.nodes = map[string]bool{}
+	}
+
+	if _, ok := c.nodes[node.ProviderKey]; ok {
+		return errors.New("node already existed")
+	}
+	c.nodes[node.ProviderKey] = true
+	//增加虚拟结点
+	for i := 0; i < virtualNodeCount; i++ {
+		virtualKey := c.hashKey(node.ProviderKey + strconv.Itoa(i))
+		c.circle[virtualKey] = node
+		c.hashSortedNodes = append(c.hashSortedNodes, virtualKey)
+	}
+
+	//虚拟结点排序
+	sort.Slice(c.hashSortedNodes, func(i, j int) bool {
+		return c.hashSortedNodes[i] < c.hashSortedNodes[j]
+	})
+
+	return nil
+}
+
+func (c *HashSelector) GetNode(key string) *registry.Provider {
+	c.RLock()
+	defer c.RUnlock()
+
+	hash := c.hashKey(key)
+	i := c.getPosition(hash)
+
+	return c.circle[c.hashSortedNodes[i]]
+}
+
+func (c *HashSelector) getPosition(hash uint32) int {
+	i := sort.Search(len(c.hashSortedNodes), func(i int) bool { return c.hashSortedNodes[i] >= hash })
+	if i < len(c.hashSortedNodes) {
+		if i == len(c.hashSortedNodes)-1 {
+			return 0
+		} else {
+			return i
+		}
+	} else {
+		return len(c.hashSortedNodes) - 1
+	}
+}
+

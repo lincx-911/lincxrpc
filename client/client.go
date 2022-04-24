@@ -49,7 +49,6 @@ type sgClient struct {
 	clientsHeartbeatFail map[string]int
 	breakers             sync.Map //map[string]CircuitBreaker
 	watcher              registry.Watcher
-
 	serversMu sync.RWMutex
 	servers   []registry.Provider
 	mu        sync.Mutex
